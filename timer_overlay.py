@@ -146,8 +146,9 @@ class TimerOverlay:
     def _on_quit(self):
         """종료 버튼 클릭됨"""
         if self.on_quit:
-            self.on_quit()
+            self.on_quit()  # 먼저 저장 처리
         self.root.quit()
+        self.root.destroy()
     
     # ========== 버튼 상태 제어 ==========
     

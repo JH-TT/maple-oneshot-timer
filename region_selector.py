@@ -7,8 +7,12 @@ class RegionSelector:
     def __init__(self):
         """영역 선택기 초기화"""
         
-        # ========== 메인 윈도우 ==========
+        # ========== 화면 크기 가져오기 ==========
         self.root = tk.Toplevel()
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+        
+        # ========== 메인 윈도우 ==========
         self.root.title("영역 설정")
         
         # 창 속성
@@ -53,19 +57,29 @@ class RegionSelector:
         )
         self.confirm_btn.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
         
-        # ========== 크기 조절 핸들 ==========
-        self.resize_handle = tk.Frame(
+        # ========== 크기 조절 핸들 (오른쪽 아래) ==========
+        self.resize_handle_br = tk.Frame(
             self.frame,
             bg="#ffffff",
             width=15,
             height=15,
             cursor="bottom_right_corner"
         )
-        self.resize_handle.place(relx=1.0, rely=1.0, anchor=tk.SE)
+        self.resize_handle_br.place(relx=1.0, rely=1.0, anchor=tk.SE)
+        
+        # ========== 크기 조절 핸들 (왼쪽 아래) ==========
+        self.resize_handle_bl = tk.Frame(
+            self.frame,
+            bg="#ffffff",
+            width=15,
+            height=15,
+            cursor="bottom_left_corner"
+        )
+        self.resize_handle_bl.place(relx=0.0, rely=1.0, anchor=tk.SW)
         
         # ========== 드래그 데이터 ==========
         self._drag_data = {"x": 0, "y": 0}
-        self._resize_data = {"x": 0, "y": 0, "width": 0, "height": 0}
+        self._resize_data = {"x": 0, "y": 0, "width": 0, "height": 0, "orig_x": 0}
         
         # ========== 이벤트 바인딩 ==========
         self.frame.bind("<Button-1>", self._on_drag_start)
@@ -73,11 +87,30 @@ class RegionSelector:
         self.label.bind("<Button-1>", self._on_drag_start)
         self.label.bind("<B1-Motion>", self._on_drag_motion)
         
-        self.resize_handle.bind("<Button-1>", self._on_resize_start)
-        self.resize_handle.bind("<B1-Motion>", self._on_resize_motion)
+        # 오른쪽 아래 핸들
+        self.resize_handle_br.bind("<Button-1>", self._on_resize_br_start)
+        self.resize_handle_br.bind("<B1-Motion>", self._on_resize_br_motion)
+        
+        # 왼쪽 아래 핸들
+        self.resize_handle_bl.bind("<Button-1>", self._on_resize_bl_start)
+        self.resize_handle_bl.bind("<B1-Motion>", self._on_resize_bl_motion)
         
         # ========== 콜백 ==========
         self.on_confirm: Optional[Callable[[dict], None]] = None
+    
+    def _clamp_position(self):
+        """영역이 화면 밖으로 나가지 않도록 제한"""
+        # X 좌표 제한
+        if self.x < 0:
+            self.x = 0
+        if self.x + self.width > self.screen_width:
+            self.x = self.screen_width - self.width
+        
+        # Y 좌표 제한
+        if self.y < 0:
+            self.y = 0
+        if self.y + self.height > self.screen_height:
+            self.y = self.screen_height - self.height
     
     def _on_drag_start(self, event):
         """드래그 시작"""
@@ -88,23 +121,66 @@ class RegionSelector:
         """드래그 중 - 창 이동"""
         self.x = self.root.winfo_x() + event.x - self._drag_data["x"]
         self.y = self.root.winfo_y() + event.y - self._drag_data["y"]
+        self._clamp_position()
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
     
-    def _on_resize_start(self, event):
-        """크기 조절 시작"""
+    # ========== 오른쪽 아래 핸들 ==========
+    
+    def _on_resize_br_start(self, event):
+        """오른쪽 아래 크기 조절 시작"""
         self._resize_data["x"] = event.x_root
         self._resize_data["y"] = event.y_root
         self._resize_data["width"] = self.width
         self._resize_data["height"] = self.height
     
-    def _on_resize_motion(self, event):
-        """크기 조절 중"""
+    def _on_resize_br_motion(self, event):
+        """오른쪽 아래 크기 조절 중"""
         dx = event.x_root - self._resize_data["x"]
         dy = event.y_root - self._resize_data["y"]
         
-        self.width = max(50, self._resize_data["width"] + dx)
-        self.height = max(50, self._resize_data["height"] + dy)
+        new_width = max(50, self._resize_data["width"] + dx)
+        new_height = max(50, self._resize_data["height"] + dy)
         
+        # 화면 밖으로 나가지 않도록
+        if self.x + new_width > self.screen_width:
+            new_width = self.screen_width - self.x
+        if self.y + new_height > self.screen_height:
+            new_height = self.screen_height - self.y
+        
+        self.width = new_width
+        self.height = new_height
+        self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
+    
+    # ========== 왼쪽 아래 핸들 ==========
+    
+    def _on_resize_bl_start(self, event):
+        """왼쪽 아래 크기 조절 시작"""
+        self._resize_data["x"] = event.x_root
+        self._resize_data["y"] = event.y_root
+        self._resize_data["width"] = self.width
+        self._resize_data["height"] = self.height
+        self._resize_data["orig_x"] = self.x
+    
+    def _on_resize_bl_motion(self, event):
+        """왼쪽 아래 크기 조절 중"""
+        dx = event.x_root - self._resize_data["x"]
+        dy = event.y_root - self._resize_data["y"]
+        
+        # 왼쪽 아래는 X가 반대로
+        new_width = max(50, self._resize_data["width"] - dx)
+        new_height = max(50, self._resize_data["height"] + dy)
+        new_x = self._resize_data["orig_x"] + dx
+        
+        # 화면 밖으로 나가지 않도록
+        if new_x < 0:
+            new_width = self._resize_data["width"] + self._resize_data["orig_x"]
+            new_x = 0
+        if self.y + new_height > self.screen_height:
+            new_height = self.screen_height - self.y
+        
+        self.x = new_x
+        self.width = new_width
+        self.height = new_height
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
     
     def _on_confirm(self):
@@ -127,6 +203,7 @@ class RegionSelector:
         self.y = y
         self.width = width
         self.height = height
+        self._clamp_position()
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
     
     def show(self):
@@ -138,22 +215,14 @@ class RegionIndicator:
     """설정된 영역을 희미하게 표시하는 테두리"""
     
     def __init__(self, root):
-        """
-        영역 표시기 초기화
-        
-        Args:
-            root: 메인 Tk 윈도우
-        """
-        # ========== 테두리 윈도우 ==========
+        """영역 표시기 초기화"""
         self.window = tk.Toplevel(root)
         self.window.title("")
         
-        # 창 속성
         self.window.attributes("-topmost", True)
         self.window.attributes("-alpha", 0.3)
         self.window.overrideredirect(True)
         
-        # ========== 테두리만 보이는 프레임 ==========
         self.frame = tk.Frame(
             self.window,
             bg="",
@@ -162,11 +231,9 @@ class RegionIndicator:
         )
         self.frame.pack(fill=tk.BOTH, expand=True)
         
-        # 내부를 투명하게 만들기 위한 트릭
         self.window.wm_attributes("-transparentcolor", "gray")
         self.frame.config(bg="gray")
         
-        # 처음엔 숨김
         self.window.withdraw()
     
     def show(self, x: int, y: int, width: int, height: int):

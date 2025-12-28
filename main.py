@@ -34,6 +34,9 @@ class OneShotTimerApp:
         # 영역 표시기 (희미한 테두리)
         self.region_indicator = RegionIndicator(self.overlay.root)
         
+        # 영역 선택기 (현재 열려있는 것 추적)
+        self.current_selector = None
+        
         # ========== 상태 변수 ==========
         self.is_active = False
         self.timer_running = False
@@ -42,14 +45,13 @@ class OneShotTimerApp:
         self.last_detected = False
         
         # ========== 감지 쿨다운 (중복 감지 방지) ==========
-        self.detection_cooldown = 10.0  # 감지 후 10초간 무시
-        self.last_trigger_time = 0.0    # 마지막 발동 시간
+        self.detection_cooldown = 10.0
+        self.last_trigger_time = 0.0
         
         # ========== 감지 영역 설정 ==========
         if self.config["detection_region"]:
             r = self.config["detection_region"]
             self.detector.set_region(r["x"], r["y"], r["width"], r["height"])
-            # 영역 표시
             self.region_indicator.show(r["x"], r["y"], r["width"], r["height"])
         
         # ========== 오버레이 위치 복원 ==========
@@ -70,13 +72,21 @@ class OneShotTimerApp:
     
     def start_detection(self):
         """시작 버튼 클릭 - 감지 시작"""
+        # 영역 선택기가 열려있으면 자동으로 확인 처리
+        if self.current_selector is not None:
+            try:
+                self.current_selector._on_confirm()
+            except:
+                pass
+            self.current_selector = None
+        
         # 영역이 설정 안 됐으면 경고
         if not self.config["detection_region"]:
             self.overlay.set_status("먼저 영역을 설정하세요!")
             return
         
         self.is_active = True
-        self.last_trigger_time = 0.0  # 시작 시 초기화
+        self.last_trigger_time = 0.0
         self.overlay.set_running(True)
         self.overlay.set_status("감지 중...")
         self._detection_loop()
@@ -92,6 +102,14 @@ class OneShotTimerApp:
     
     def open_region_selector(self):
         """영역 설정 버튼 클릭 - 영역 선택기 열기"""
+        # 이미 열려있으면 닫기
+        if self.current_selector is not None:
+            try:
+                self.current_selector.root.destroy()
+            except:
+                pass
+            self.current_selector = None
+        
         # 감지 중이면 먼저 정지
         self.is_active = False
         self.timer_running = False
@@ -101,6 +119,7 @@ class OneShotTimerApp:
         
         # 영역 선택기 생성
         selector = RegionSelector()
+        self.current_selector = selector  # 추적용 저장
         
         # 기존 영역이 있으면 그 위치로 초기화
         if self.config["detection_region"]:
@@ -114,6 +133,9 @@ class OneShotTimerApp:
     
     def _on_region_confirmed(self, region: dict):
         """영역 선택 완료 콜백"""
+        # 선택기 추적 해제
+        self.current_selector = None
+        
         # 설정에 저장
         self.config["detection_region"] = region
         save_config(self.config)
@@ -138,8 +160,28 @@ class OneShotTimerApp:
     
     def quit_app(self):
         """종료 버튼 클릭 - 앱 종료"""
-        self._save_position()
+        # 먼저 위치 저장
+        try:
+            x, y = self.overlay.get_position()
+            self.config["overlay_position"] = {"x": x, "y": y}
+            save_config(self.config)
+        except:
+            pass
+        
+        self.is_active = False
         self.region_indicator.hide()
+        
+        # 영역 선택기 열려있으면 닫기
+        if self.current_selector is not None:
+            try:
+                self.current_selector.root.destroy()
+            except:
+                pass
+        
+        try:
+            self.region_indicator.window.destroy()
+        except:
+            pass
     
     def _detection_loop(self):
         """메인 감지 루프"""
@@ -149,17 +191,25 @@ class OneShotTimerApp:
         current_time = time.time()
         
         # ========== 감지 쿨다운 체크 ==========
-        # 마지막 발동 후 10초가 지났는지 확인
         time_since_trigger = current_time - self.last_trigger_time
         can_detect = time_since_trigger >= self.detection_cooldown
         
         if can_detect:
-            # 화면에서 아이콘 감지 시도
             detected = self.detector.detect()
+            
+            match_val = self.detector.get_last_match_value()
+            threshold = self.detector.threshold
             
             if detected:
                 self._start_timer()
-                self.last_trigger_time = current_time  # 발동 시간 기록
+                self.last_trigger_time = current_time
+            else:
+                if not self.timer_running:
+                    self.overlay.set_status(f"매칭: {match_val:.2f} / 기준: {threshold:.2f}")
+        else:
+            remaining_cooldown = self.detection_cooldown - time_since_trigger
+            if not self.timer_running:
+                self.overlay.set_status(f"재감지 대기: {remaining_cooldown:.1f}초")
         
         # ========== 타이머 업데이트 ==========
         if self.timer_running:
@@ -173,7 +223,6 @@ class OneShotTimerApp:
             else:
                 self.overlay.update_timer(remaining)
         
-        # 다음 루프 예약
         self.overlay.schedule(
             self.config["scan_interval_ms"],
             self._detection_loop
@@ -187,9 +236,12 @@ class OneShotTimerApp:
     
     def _save_position(self):
         """오버레이 창 위치 저장"""
-        x, y = self.overlay.get_position()
-        self.config["overlay_position"] = {"x": x, "y": y}
-        save_config(self.config)
+        try:
+            x, y = self.overlay.get_position()
+            self.config["overlay_position"] = {"x": x, "y": y}
+            save_config(self.config)
+        except:
+            pass
     
     def run(self):
         """앱 실행"""
@@ -204,8 +256,8 @@ class OneShotTimerApp:
         
         try:
             self.overlay.run()
-        finally:
-            self._save_position()
+        except:
+            pass
 
 
 # ========== 프로그램 시작점 ==========
