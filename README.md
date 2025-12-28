@@ -48,12 +48,11 @@
 ---
 
 ## 📁 폴더 구조
-```
-OneShotTimer/
-├── OneShotTimer.exe
-└── assets/
-    └── oneshot_icon.png   ← 직접 캡처 필요
-```
+
+    OneShotTimer/
+    ├── OneShotTimer.exe
+    └── assets/
+        └── oneshot_icon.png   ← 직접 캡처 필요
 
 ---
 
@@ -75,18 +74,17 @@ OneShotTimer/
 - pip 패키지: opencv-python, mss, numpy, Pillow, pyinstaller
 
 ### 빌드 방법
-```bash
-# 가상환경 생성 및 활성화
-python -m venv venv
-venv\Scripts\activate
 
-# 패키지 설치
-pip install -r requirements.txt
-pip install pyinstaller
+    # 가상환경 생성 및 활성화
+    python -m venv venv
+    venv\Scripts\activate
 
-# exe 빌드
-pyinstaller --onefile --noconsole --name "OneShotTimer" main.py
-```
+    # 패키지 설치
+    pip install -r requirements.txt
+    pip install pyinstaller
+
+    # exe 빌드
+    pyinstaller --onefile --noconsole --name "OneShotTimer" main.py
 
 빌드된 파일: `dist/OneShotTimer.exe`
 
@@ -103,33 +101,3 @@ pyinstaller --onefile --noconsole --name "OneShotTimer" main.py
 ## 📝 라이선스
 
 MIT License
-```
-
-`Ctrl + S`로 저장
-
----
-
-## GitHub Releases로 exe 배포하기
-
-### 방법 1: 웹에서 직접 올리기
-
-1. GitHub 저장소 페이지 접속
-2. 오른쪽 **Releases** 클릭
-3. **Create a new release** 클릭
-4. Tag: `v1.0.0-beta`
-5. Title: `v1.0.0-beta 일격필살 타이머`
-6. 설명 작성
-7. **Attach binaries** 영역에 `OneShotTimer.zip` 드래그해서 업로드
-8. **Publish release** 클릭
-
----
-
-### ZIP 파일 준비
-```
-OneShotTimer.zip (이 안에)
-├── OneShotTimer.exe
-└── assets/
-    └── (빈 폴더 또는 샘플 이미지)
-```
-
----
